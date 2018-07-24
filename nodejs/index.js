@@ -8,8 +8,25 @@ var Wallet  	= require('ethereumjs-wallet');
 var EthUtil  	= require('ethereumjs-util');
 var Web3  		= require('web3');
 var Tx 			= require('ethereumjs-tx');
+var cfg			= require('./config.js')
 
-var web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545"));
+function parseErrorString(err) {
+	if(err.innerMessage) return err.innerMessage;
+	var message = err.message;
+	if(message.indexOf("sender doesn't have enough funds to send tx.") != -1) {
+		message = "sender doesn't have enough funds to send tx.";
+	}
+	else if(message.indexOf("Private key does not satisfy the curve requirements (ie. it is invalid)") != -1) {
+		message = "Private key does not satisfy the curve requirements (ie. it is invalid)";
+	}			
+	else {
+		console.log(err);
+		message = "unknown error";	
+	}
+	return message;
+}
+
+var web3 = new Web3(new Web3.providers.HttpProvider(cfg.ethProvider));
 
 var app = express();
 var multipartMiddleware = multipart();
@@ -17,7 +34,7 @@ var multipartMiddleware = multipart();
 const mongoose = require('mongoose');
 mongoose.Promise = global.Promise;
  
-mongoose.connect('mongodb://localhost:27017/local', { useNewUrlParser: true });
+mongoose.connect('mongodb://' + cfg.mongodb, { useNewUrlParser: true });
 var db = mongoose.connection;
 db.on('error', console.error.bind(console, 'MongoDB connection error:'));
 
@@ -56,6 +73,11 @@ app.post('/sendTransaction.json', function(req, res){
 
 	var g_SendTransaction = coroutine(function*(g) {
 
+		var amount = parseInt(req.body.amount)
+		if(typeof amount != "number" || isNaN(amount) || amount < 0) {
+			throw { innerMessage: 'wrong amount' }
+		}
+
 		// dirty hack :(
 		var keystore = Buffer.from(req.body.keystore.substring(13), 'base64').toString("ascii")
 
@@ -70,7 +92,7 @@ app.post('/sendTransaction.json', function(req, res){
 			gasPrice: 	20000000000,
 			gasLimit: 	90000,
 			to: 		'0x0000000000000000000000000000000000000000',
-			value: 		req.body.amount,
+			value: 		amount,
 			data: 		'0x7f'
 		}
 
@@ -96,18 +118,7 @@ app.post('/sendTransaction.json', function(req, res){
 
 	g_SendTransaction(function(err, result) {
 		if(err) {
-			var message = err.message;
-
-			if(message.indexOf("sender doesn't have enough funds to send tx.") != -1) {
-				message = "sender doesn't have enough funds to send tx.";
-			}
-			else if(message.indexOf("Private key does not satisfy the curve requirements (ie. it is invalid)") != -1) {
-				message = "Private key does not satisfy the curve requirements (ie. it is invalid)";
-			}			
-			else {
-				console.log(err);
-				message = "unknown error";	
-			}
+			var message = parseErrorString(err);
 			res.send(JSON.stringify({ status: "error", error: message }));
 			return;
 		}
@@ -133,18 +144,7 @@ app.get('/getTransaction.json', function(req, res){
 
 	g_GetTransaction(function(err, result) {
 		if(err) {
-			var message = err.message;
-
-			if(message.indexOf("sender doesn't have enough funds to send tx.") != -1) {
-				message = "sender doesn't have enough funds to send tx.";
-			}
-			else if(message.indexOf("Private key does not satisfy the curve requirements (ie. it is invalid)") != -1) {
-				message = "Private key does not satisfy the curve requirements (ie. it is invalid)";
-			}			
-			else {
-				console.log(err);
-				message = "unknown error";	
-			}
+			var message = parseErrorString(err);
 			res.send(JSON.stringify({ status: "error", error: message }));
 			return;
 		}
@@ -152,4 +152,4 @@ app.get('/getTransaction.json', function(req, res){
 
 })
 
-app.listen(3001);
+app.listen(cfg.httpPort);

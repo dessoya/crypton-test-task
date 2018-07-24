@@ -9,6 +9,8 @@ app.controller("TransactionsCtrl", function($scope, $http) {
 
 		var g_addRow = coroutine(function*(g) {
 
+			$scope.formError = '';
+
 			var fileToLoad = $scope.file;
 			var fileLoadedEvent = yield readLocalFile(fileToLoad, g.resume);
 
@@ -37,8 +39,17 @@ app.controller("TransactionsCtrl", function($scope, $http) {
 	        };
 
 			var response = yield $httpCallback($http, params, g.resume);
-			$scope.transactions.push({ createdAt: response.createdAt, tx: response.tx });
 			console.log(response);
+			if(response.status === 'error') {
+				$scope.formError = response.error;
+			}
+			else {
+				$scope.transactions.push({ createdAt: response.createdAt, tx: response.tx });
+				$scope.key_store_password = '';
+				$scope.amount = '';
+				$scope.file = null;
+			}
+			
 
 		});
 
